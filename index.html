@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV Quiz Master</title>
+    
+    <!-- 
+      ========================================
+      STYLE.CSS (Interne Stylesheet)
+      ========================================
+    -->
+    <style>
+        :root {
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --background: #f3f4f6;
+            --surface: #ffffff;
+            --text: #1f2937;
+            --text-light: #6b7280;
+            --success: #10b981;
+            --error: #ef4444;
+            --border-radius: 12px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--background);
+            color: var(--text);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            background: var(--surface);
+            padding: 2rem;
+            border-radius: var(--border-radius);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 600px;
+            transition: all 0.3s ease;
+        }
+
+        h1, h2 {
+            margin-bottom: 1rem;
+            color: var(--text);
+            text-align: center;
+        }
+
+        h1 { font-size: 1.8rem; color: var(--primary); }
+        h2 { font-size: 1.4rem; }
+
+        /* Utility Classes */
+        .hidden { display: none !important; }
+        .full-width { width: 100%; }
+        .mt-4 { margin-top: 1rem; }
+        .mb-4 { margin-bottom: 1rem; }
+        .text-center { text-align: center; }
+
+        /* Form Elements */
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        input[type="file"],
+        input[type="number"],
+        input[type="text"],
+        select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input:focus, select:focus {
+            border-color: var(--primary);
+        }
+
+        /* Buttons */
+        .btn {
+            background-color: var(--primary);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: background-color 0.2s;
+        }
+
+        .btn:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .btn:disabled {
+            background-color: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background-color: #6b7280;
+        }
+        .btn-secondary:hover { background-color: #4b5563; }
+
+        /* File Upload Area */
+        .upload-area {
+            border: 2px dashed #cbd5e1;
+            padding: 2rem;
+            text-align: center;
+            border-radius: var(--border-radius);
+            margin-bottom: 1rem;
+            cursor: pointer;
+        }
+        .upload-area:hover {
+            border-color: var(--primary);
+            background-color: #eff6ff;
+        }
+
+        /* Settings Grid */
+        .categories-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 10px;
+            margin-bottom: 1rem;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #e5e7eb;
+            padding: 10px;
+            border-radius: 8px;
+        }
+
+        .cat-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+        }
+
+        /* Quiz Interface */
+        .progress-bar {
+            height: 6px;
+            background: #e5e7eb;
+            border-radius: 3px;
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: var(--primary);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .question-card {
+            background: #f8fafc;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            border-left: 5px solid var(--primary);
+        }
+
+        /* Nieuwe style voor het antwoordblok */
+        .answer-display {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px dashed #cbd5e1;
+            color: var(--text-light);
+            font-size: 0.95rem;
+        }
+        
+        .answer-display strong {
+            color: var(--primary);
+            font-weight: 700;
+            margin-left: 5px;
+            font-size: 1.1rem;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            font-size: 0.75rem;
+            background: #e0e7ff;
+            color: #3730a3;
+            border-radius: 4px;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Feedback */
+        .feedback {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            display: none;
+        }
+        .feedback.incorrect {
+            background-color: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #ef4444;
+            display: block;
+        }
+
+        /* Results Table */
+        .results-summary {
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+            padding: 1rem;
+            background: #f0f9ff;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .review-list {
+            list-style: none;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+        }
+
+        .review-item {
+            padding: 1rem;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 0.9rem;
+        }
+        .review-item:last-child { border-bottom: none; }
+        
+        .answer-detail { font-size: 0.85rem; color: var(--text-light); margin-top: 4px; }
+        
+        /* Responsive tweaks */
+        @media (max-width: 480px) {
+            .container { padding: 1.5rem; }
+            h1 { font-size: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 
+      ========================================
+      INDEX.HTML (Structuur)
+      ========================================
+    -->
+
+    <!-- Stap 1: Upload Scherm -->
+    <div id="step-upload" class="container">
+        <h1>Quiz CSV Lader</h1>
+        <p class="text-center mb-4">Upload een CSV bestand om te beginnen.</p>
+        <p class="text-center" style="font-size: 0.8rem; color: #666; margin-bottom: 1rem;">
+            Formaat: Vraag, Antwoord, Categorie, Moeilijkheidsgraad
+        </p>
+
+        <div class="upload-area" onclick="document.getElementById('csvInput').click()">
+            <p>Klik hier of sleep een bestand</p>
+            <input type="file" id="csvInput" accept=".csv" class="hidden" onchange="handleFileUpload(this)">
+        </div>
+        <div id="error-msg" class="feedback incorrect"></div>
+    </div>
+
+    <!-- Stap 2: Instellingen Scherm -->
+    <div id="step-settings" class="container hidden">
+        <h2>Quiz Instellingen</h2>
+        
+        <label for="questionCount">Aantal vragen (Max: <span id="maxQuestions">0</span>)</label>
+        <input type="number" id="questionCount" min="1" value="10">
+
+        <label>Moeilijkheidsgraad</label>
+        <select id="difficultySelect">
+            <option value="all">Door elkaar</option>
+            <option value="Makkelijk">Makkelijk</option>
+            <option value="Gemiddeld">Gemiddeld</option>
+            <option value="Moeilijk">Moeilijk</option>
+        </select>
+
+        <label>Categorieën (Kies max 5 of niks voor alles)</label>
+        <div id="categoriesList" class="categories-grid">
+            <!-- Checkboxes worden hier gegenereerd -->
+        </div>
+
+        <button class="btn mt-4" onclick="startQuiz()">Start Quiz</button>
+    </div>
+
+    <!-- Stap 3: Quiz Scherm -->
+    <div id="step-quiz" class="container hidden">
+        <div class="progress-bar">
+            <div id="progressBarFill" class="progress-fill"></div>
+        </div>
+        
+        <div class="header-row" style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+            <span id="questionCounter" style="font-weight: bold; color: var(--text-light);">Vraag 1/10</span>
+            <!-- Score teller verwijderd voor quizmaster mode -->
+        </div>
+
+        <div class="question-card">
+            <div id="qBadge" class="badge">Categorie</div>
+            <h3 id="qText" style="font-size: 1.2rem;">Hier komt de vraag?</h3>
+            
+            <div id="qAnswerDisplay" class="answer-display">
+                Antwoord: <strong id="qAnswerText">...</strong>
+            </div>
+        </div>
+
+        <!-- Invoervelden verwijderd, alleen navigatie -->
+        
+        <button id="nextBtn" class="btn" onclick="nextQuestion()">Volgende Vraag</button>
+    </div>
+
+    <!-- Stap 4: Resultaten Scherm -->
+    <div id="step-results" class="container hidden">
+        <h1>Einde Quiz</h1>
+        
+        <div class="results-summary">
+            <p>Alle vragen zijn geweest!</p>
+            <h2 style="font-size: 2rem; color: var(--primary); margin: 10px 0;">Klaar</h2>
+        </div>
+
+        <h3>Gestelde vragen</h3>
+        <ul id="reviewList" class="review-list mb-4">
+            <!-- Review items komen hier -->
+        </ul>
+
+        <button class="btn" onclick="restartApp()">Nieuwe Quiz</button>
+    </div>
+
+    <!-- 
+      ========================================
+      SCRIPT.JS (Logica)
+      ========================================
+    -->
+    <script>
+        // --- Globale State ---
+        let allQuestions = [];
+        let currentQuizQuestions = [];
+        let currentQuestionIndex = 0;
+        let playedQuestions = [];
+
+        // --- Stap 1: CSV Parsing & Upload ---
+
+        function handleFileUpload(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                let text = e.target.result;
+                text = text.replace(/^\uFEFF/, '');
+                
+                try {
+                    allQuestions = parseCSV(text);
+                    if (allQuestions.length === 0) throw new Error("Het bestand kon niet gelezen worden.");
+                    
+                    // Normaliseer sleutels
+                    allQuestions = allQuestions.map(q => {
+                        const newQ = {};
+                        Object.keys(q).forEach(k => {
+                            const lowK = k.toLowerCase();
+                            if(lowK === 'vraag' || lowK === 'question') newQ.Vraag = q[k];
+                            else if(lowK === 'antwoord' || lowK === 'answer') newQ.Antwoord = q[k];
+                            else if(lowK === 'categorie' || lowK === 'category') newQ.Categorie = q[k];
+                            else if(lowK === 'moeilijkheidsgraad' || lowK === 'difficulty') newQ.Moeilijkheidsgraad = q[k];
+                        });
+
+                        if (!newQ.Vraag || !newQ.Antwoord) return null;
+
+                        if(!newQ.Categorie) newQ.Categorie = "Algemeen";
+                        if(!newQ.Moeilijkheidsgraad) newQ.Moeilijkheidsgraad = "Gemiddeld";
+                        return newQ;
+                    }).filter(q => q !== null);
+
+                    if (allQuestions.length === 0) throw new Error("Geen geldige vragen gevonden na verwerking.");
+
+                    initSettingsScreen();
+                } catch (err) {
+                    console.error(err);
+                    const errEl = document.getElementById('error-msg');
+                    errEl.textContent = "Fout: " + err.message;
+                    errEl.style.display = 'block';
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // CSV Parser
+        function parseCSV(text) {
+            const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
+            if (lines.length === 0) return [];
+
+            const firstLine = lines[0];
+            const semiCount = (firstLine.match(/;/g) || []).length;
+            const commaCount = (firstLine.match(/,/g) || []).length;
+            const delimiter = semiCount > commaCount ? ';' : ',';
+
+            let firstRowRaw = parseCSVLine(lines[0], delimiter).map(h => h.trim().replace(/^"|"$/g, ''));
+            if (firstRowRaw.length > 0 && firstRowRaw[firstRowRaw.length - 1] === "") firstRowRaw.pop();
+
+            const lowerValues = firstRowRaw.map(v => v.toLowerCase());
+            const hasHeaders = lowerValues.includes('vraag') || lowerValues.includes('question') || lowerValues.includes('antwoord') || lowerValues.includes('answer');
+
+            let headers = [];
+            let startIndex = 0;
+
+            if (hasHeaders) {
+                headers = firstRowRaw;
+                startIndex = 1;
+            } else {
+                headers = ['Vraag', 'Antwoord', 'Categorie', 'Moeilijkheidsgraad'];
+                startIndex = 0;
+            }
+
+            const data = [];
+            for (let i = startIndex; i < lines.length; i++) {
+                const values = parseCSVLine(lines[i], delimiter);
+                if (values.length > 0 && values[values.length - 1] === "") values.pop();
+
+                const obj = {};
+                
+                if (hasHeaders) {
+                    headers.forEach((h, idx) => {
+                        if (values[idx] !== undefined) obj[h] = values[idx].trim();
+                    });
+                } else {
+                    obj['Vraag'] = values[0]?.trim();
+                    obj['Antwoord'] = values[1]?.trim();
+                    if (values[2]) obj['Categorie'] = values[2].trim();
+                    if (values[3]) obj['Moeilijkheidsgraad'] = values[3].trim();
+                }
+                
+                if (Object.keys(obj).length > 0) {
+                    data.push(obj);
+                }
+            }
+            return data;
+        }
+
+        function parseCSVLine(text, delimiter) {
+            let result = [];
+            let current = '';
+            let inQuotes = false;
+            for (let i = 0; i < text.length; i++) {
+                const char = text[i];
+                if (char === '"') inQuotes = !inQuotes;
+                else if (char === delimiter && !inQuotes) {
+                    result.push(current);
+                    current = '';
+                } else current += char;
+            }
+            result.push(current);
+            return result.map(s => s.replace(/^"|"$/g, '').trim());
+        }
+
+        // --- Stap 2: Instellingen ---
+
+        function initSettingsScreen() {
+            document.getElementById('step-upload').classList.add('hidden');
+            document.getElementById('step-settings').classList.remove('hidden');
+
+            const maxQ = allQuestions.length;
+            document.getElementById('maxQuestions').textContent = maxQ;
+            document.getElementById('questionCount').max = maxQ;
+            document.getElementById('questionCount').value = Math.min(5, maxQ);
+
+            const categories = [...new Set(allQuestions.map(q => q.Categorie))].sort();
+            const catList = document.getElementById('categoriesList');
+            catList.innerHTML = '';
+
+            categories.forEach(cat => {
+                if(!cat) return;
+                const div = document.createElement('div');
+                div.className = 'cat-option';
+                div.innerHTML = `
+                    <input type="checkbox" id="cat-${cat}" value="${cat}" name="category">
+                    <label for="cat-${cat}">${cat}</label>
+                `;
+                catList.appendChild(div);
+            });
+        }
+
+        function startQuiz() {
+            const countInput = parseInt(document.getElementById('questionCount').value);
+            const difficulty = document.getElementById('difficultySelect').value;
+            
+            const checkboxes = document.querySelectorAll('input[name="category"]:checked');
+            const selectedCategories = Array.from(checkboxes).map(cb => cb.value);
+
+            let filtered = allQuestions.filter(q => {
+                const catMatch = selectedCategories.length === 0 || selectedCategories.includes(q.Categorie);
+                const diffMatch = difficulty === 'all' || q.Moeilijkheidsgraad === difficulty;
+                return catMatch && diffMatch;
+            });
+
+            if (filtered.length === 0) {
+                alert("Geen vragen gevonden met deze instellingen.");
+                return;
+            }
+
+            // Shuffle
+            for (let i = filtered.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [filtered[i], filtered[j]] = [filtered[j], filtered[i]];
+            }
+
+            currentQuizQuestions = filtered.slice(0, countInput);
+            currentQuestionIndex = 0;
+            playedQuestions = [];
+
+            document.getElementById('step-settings').classList.add('hidden');
+            document.getElementById('step-quiz').classList.remove('hidden');
+
+            showQuestion();
+        }
+
+        // --- Stap 3: Quiz Logica (Master Mode) ---
+
+        function showQuestion() {
+            const q = currentQuizQuestions[currentQuestionIndex];
+            
+            // UI Content
+            document.getElementById('questionCounter').textContent = `Vraag ${currentQuestionIndex + 1} / ${currentQuizQuestions.length}`;
+            document.getElementById('qText').textContent = q.Vraag;
+            document.getElementById('qBadge').textContent = `${q.Categorie} (${q.Moeilijkheidsgraad})`;
+            document.getElementById('qAnswerText').textContent = q.Antwoord;
+            
+            // Progress Bar
+            const pct = ((currentQuestionIndex) / currentQuizQuestions.length) * 100;
+            document.getElementById('progressBarFill').style.width = `${pct}%`;
+            
+            // Track vraag voor overzicht op einde
+            // Check if not already added (in case of re-render)
+            if(playedQuestions.length === currentQuestionIndex) {
+                 playedQuestions.push(q);
+            }
+        }
+
+        function nextQuestion() {
+            currentQuestionIndex++;
+            if (currentQuestionIndex < currentQuizQuestions.length) {
+                showQuestion();
+            } else {
+                finishQuiz();
+            }
+        }
+
+        // --- Stap 4: Resultaten ---
+
+        function finishQuiz() {
+            document.getElementById('step-quiz').classList.add('hidden');
+            document.getElementById('step-results').classList.remove('hidden');
+
+            const list = document.getElementById('reviewList');
+            list.innerHTML = '';
+
+            playedQuestions.forEach((q, idx) => {
+                const li = document.createElement('li');
+                li.className = 'review-item';
+                // Neutrale styling, geen rood/groen want geen score
+                li.style.borderLeft = "5px solid var(--primary)"; 
+                
+                li.innerHTML = `
+                    <div style="font-weight:bold;">${idx + 1}. ${q.Vraag}</div>
+                    <div class="answer-detail" style="color:var(--text)">Antwoord: <strong>${q.Antwoord}</strong></div>
+                `;
+                list.appendChild(li);
+            });
+        }
+
+        function restartApp() {
+            document.getElementById('step-results').classList.add('hidden');
+            initSettingsScreen(); 
+        }
+    </script>
+</body>
+</html>
