@@ -120,6 +120,27 @@
         }
         .btn-secondary:hover { background-color: #4b5563; }
 
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 0.85rem;
+            margin-top: 8px;
+            margin-right: 5px;
+            background-color: #e5e7eb;
+            color: #374151;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-small:hover { background-color: #d1d5db; }
+        
+        .btn-warning {
+            background-color: #fff7ed;
+            color: #c2410c;
+            border: 1px solid #fed7aa;
+        }
+        .btn-warning:hover { background-color: #ffedd5; }
+
         /* File Upload Area */
         .upload-area {
             border: 2px dashed #cbd5e1;
@@ -210,11 +231,37 @@
             margin-top: 1rem;
             display: none;
         }
+        .feedback.correct {
+            background-color: #d1fae5;
+            color: #065f46;
+            border: 1px solid #10b981;
+            display: block;
+        }
         .feedback.incorrect {
             background-color: #fee2e2;
             color: #991b1b;
             border: 1px solid #ef4444;
             display: block;
+        }
+
+        /* Skipped Details Log */
+        .error-log {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.5);
+            border: 1px solid rgba(0,0,0,0.1);
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            max-height: 150px;
+            overflow-y: auto;
+            text-align: left;
+            display: none;
+        }
+        .error-log-item {
+            border-bottom: 1px solid #ddd;
+            padding: 4px 0;
+            color: #b91c1c;
         }
 
         /* Results Table */
@@ -268,10 +315,18 @@
         </p>
 
         <div class="upload-area" onclick="document.getElementById('csvInput').click()">
-            <p>Klik hier of sleep een bestand</p>
+            <p id="upload-placeholder-text">Klik hier of sleep een bestand</p>
             <input type="file" id="csvInput" accept=".csv" class="hidden" onchange="handleFileUpload(this)">
         </div>
-        <div id="error-msg" class="feedback incorrect"></div>
+        
+        <!-- Feedback container (voor succes én fouten) -->
+        <div id="upload-msg" class="feedback"></div>
+        <div id="skipped-details" class="error-log"></div>
+
+        <!-- Nieuwe knop om handmatig verder te gaan na upload -->
+        <button id="btn-step1-next" class="btn mt-4 hidden" onclick="initSettingsScreen()">
+            Instellingen configureren (Doorgaan)
+        </button>
     </div>
 
     <!-- Stap 2: Instellingen Scherm -->
@@ -350,6 +405,7 @@
         let currentQuizQuestions = [];
         let currentQuestionIndex = 0;
         let playedQuestions = [];
+        let lastUploadErrors = []; // Opslag voor fouten
 
         // --- Stap 1: CSV Parsing & Upload ---
 
@@ -357,112 +413,230 @@
             const file = input.files[0];
             if (!file) return;
 
+            document.getElementById('upload-placeholder-text').textContent = file.name;
+
             const reader = new FileReader();
             reader.onload = function(e) {
                 let text = e.target.result;
-                text = text.replace(/^\uFEFF/, '');
+                text = text.replace(/^\uFEFF/, ''); // Verwijder BOM
+                
+                const msgBox = document.getElementById('upload-msg');
+                const nextBtn = document.getElementById('btn-step1-next');
+                const logBox = document.getElementById('skipped-details');
+                
+                // Reset UI
+                logBox.style.display = 'none';
+                logBox.innerHTML = '';
+                lastUploadErrors = [];
                 
                 try {
-                    allQuestions = parseCSV(text);
-                    if (allQuestions.length === 0) throw new Error("Het bestand kon niet gelezen worden.");
+                    // "Toernooi" strategie: probeer beide scheidingstekens
+                    const resultComma = parseAndValidate(text, ',');
+                    const resultSemi = parseAndValidate(text, ';');
+
+                    // Kies het resultaat met de meeste geldige vragen
+                    let bestResult = resultComma;
+                    if (resultSemi.validQuestions.length > resultComma.validQuestions.length) {
+                        bestResult = resultSemi;
+                    }
+
+                    // Foutafhandeling
+                    if (bestResult.validQuestions.length === 0) {
+                        throw new Error("Geen geldige vragen gevonden. Controleer het bestand.");
+                    }
+
+                    allQuestions = bestResult.validQuestions;
+                    lastUploadErrors = bestResult.errors;
+
+                    // UI Feedback
+                    msgBox.className = 'feedback correct';
+                    msgBox.style.display = 'block';
                     
-                    // Normaliseer sleutels
-                    allQuestions = allQuestions.map(q => {
-                        const newQ = {};
-                        Object.keys(q).forEach(k => {
-                            const lowK = k.toLowerCase();
-                            if(lowK === 'vraag' || lowK === 'question') newQ.Vraag = q[k];
-                            else if(lowK === 'antwoord' || lowK === 'answer') newQ.Antwoord = q[k];
-                            else if(lowK === 'categorie' || lowK === 'category') newQ.Categorie = q[k];
-                            else if(lowK === 'moeilijkheidsgraad' || lowK === 'difficulty') newQ.Moeilijkheidsgraad = q[k];
-                        });
+                    let msg = `<strong>Succes!</strong> ${allQuestions.length} vragen ingeladen.`;
+                    
+                    // Alleen waarschuwen als er ECHTE fouten zijn (niet alleen lege regels)
+                    if (bestResult.skippedCount > 0) {
+                        msg += ` <br><span style="font-size:0.85em; opacity:0.9; color:#065f46;">Let op: ${bestResult.skippedCount} regels overgeslagen (onvolledig).</span>`;
+                        
+                        // Knoppen voor details en download
+                        msg += `
+                            <div style="margin-top:5px;">
+                                <button class="btn-small" onclick="document.getElementById('skipped-details').style.display = 'block'">Bekijk details</button>
+                                <button class="btn-small btn-warning" onclick="downloadErrorsCSV()">Download Foutenrapport</button>
+                            </div>
+                        `;
+                        
+                        // Vul log
+                        logBox.innerHTML = `<strong>Overgeslagen regels (Eerste 10):</strong><br>` + 
+                            bestResult.errors.slice(0, 10).map(e => `<div class="error-log-item">Regel ${e.row}: ${e.reason}</div>`).join('');
+                        
+                        if (bestResult.errors.length > 10) {
+                            logBox.innerHTML += `<div>... en nog ${bestResult.errors.length - 10} andere.</div>`;
+                        }
+                    }
+                    msgBox.innerHTML = msg;
+                    
+                    nextBtn.classList.remove('hidden');
 
-                        if (!newQ.Vraag || !newQ.Antwoord) return null;
-
-                        if(!newQ.Categorie) newQ.Categorie = "Algemeen";
-                        if(!newQ.Moeilijkheidsgraad) newQ.Moeilijkheidsgraad = "Gemiddeld";
-                        return newQ;
-                    }).filter(q => q !== null);
-
-                    if (allQuestions.length === 0) throw new Error("Geen geldige vragen gevonden na verwerking.");
-
-                    initSettingsScreen();
                 } catch (err) {
                     console.error(err);
-                    const errEl = document.getElementById('error-msg');
-                    errEl.textContent = "Fout: " + err.message;
-                    errEl.style.display = 'block';
+                    msgBox.className = 'feedback incorrect';
+                    msgBox.style.display = 'block';
+                    msgBox.textContent = "Fout: " + err.message;
+                    nextBtn.classList.add('hidden');
                 }
             };
             reader.readAsText(file);
         }
 
-        // CSV Parser
-        function parseCSV(text) {
-            const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
-            if (lines.length === 0) return [];
-
-            const firstLine = lines[0];
-            const semiCount = (firstLine.match(/;/g) || []).length;
-            const commaCount = (firstLine.match(/,/g) || []).length;
-            const delimiter = semiCount > commaCount ? ';' : ',';
-
-            let firstRowRaw = parseCSVLine(lines[0], delimiter).map(h => h.trim().replace(/^"|"$/g, ''));
-            if (firstRowRaw.length > 0 && firstRowRaw[firstRowRaw.length - 1] === "") firstRowRaw.pop();
-
-            const lowerValues = firstRowRaw.map(v => v.toLowerCase());
-            const hasHeaders = lowerValues.includes('vraag') || lowerValues.includes('question') || lowerValues.includes('antwoord') || lowerValues.includes('answer');
-
-            let headers = [];
-            let startIndex = 0;
-
-            if (hasHeaders) {
-                headers = firstRowRaw;
-                startIndex = 1;
-            } else {
-                headers = ['Vraag', 'Antwoord', 'Categorie', 'Moeilijkheidsgraad'];
-                startIndex = 0;
+        // Functie om errors te downloaden
+        function downloadErrorsCSV() {
+            if (lastUploadErrors.length === 0) {
+                alert("Er zijn geen fouten om te downloaden.");
+                return;
             }
-
-            const data = [];
-            for (let i = startIndex; i < lines.length; i++) {
-                const values = parseCSVLine(lines[i], delimiter);
-                if (values.length > 0 && values[values.length - 1] === "") values.pop();
-
-                const obj = {};
-                
-                if (hasHeaders) {
-                    headers.forEach((h, idx) => {
-                        if (values[idx] !== undefined) obj[h] = values[idx].trim();
-                    });
-                } else {
-                    obj['Vraag'] = values[0]?.trim();
-                    obj['Antwoord'] = values[1]?.trim();
-                    if (values[2]) obj['Categorie'] = values[2].trim();
-                    if (values[3]) obj['Moeilijkheidsgraad'] = values[3].trim();
-                }
-                
-                if (Object.keys(obj).length > 0) {
-                    data.push(obj);
-                }
-            }
-            return data;
+            
+            let csvContent = "Regelnummer,Reden,Inhoud_Preview\n";
+            lastUploadErrors.forEach(err => {
+                // Quotes escapen in CSV is belangrijk: " wordt ""
+                const reason = err.reason.replace(/"/g, '""');
+                const content = err.content.replace(/"/g, '""');
+                csvContent += `${err.row},"${reason}","${content}"\n`;
+            });
+            
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", "quiz_import_fouten.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
 
-        function parseCSVLine(text, delimiter) {
-            let result = [];
-            let current = '';
+        // Wrapper die parset en valideert voor een specifiek scheidingsteken
+        function parseAndValidate(text, delimiter) {
+            const rawData = parseCSVRobust(text, delimiter);
+            
+            if (rawData.length === 0) return { validQuestions: [], skippedCount: 0, errors: [] };
+
+            const headers = detectHeaders(rawData[0]);
+            const hasHeaders = headers.found;
+            const startIndex = hasHeaders ? 1 : 0;
+            
+            let validQuestions = [];
+            let skippedCount = 0;
+            let errors = [];
+
+            for (let i = startIndex; i < rawData.length; i++) {
+                const row = rawData[i];
+                
+                // Check of de rij volledig leeg is
+                const isEmptyRow = row.every(cell => !cell || cell.trim() === '');
+                if (isEmptyRow) continue; 
+
+                const qObj = {};
+                
+                if (hasHeaders) {
+                    if (row[headers.map.Vraag] !== undefined) qObj.Vraag = row[headers.map.Vraag];
+                    if (row[headers.map.Antwoord] !== undefined) qObj.Antwoord = row[headers.map.Antwoord];
+                    if (row[headers.map.Categorie] !== undefined) qObj.Categorie = row[headers.map.Categorie];
+                    if (row[headers.map.Moeilijkheidsgraad] !== undefined) qObj.Moeilijkheidsgraad = row[headers.map.Moeilijkheidsgraad];
+                } else {
+                    qObj.Vraag = row[0];
+                    qObj.Antwoord = row[1];
+                    qObj.Categorie = row[2];
+                    qObj.Moeilijkheidsgraad = row[3];
+                }
+
+                // Strikte validatie: vraag én antwoord moeten bestaan
+                if (qObj.Vraag && qObj.Antwoord && qObj.Vraag.trim() !== "") {
+                    validQuestions.push({
+                        Vraag: qObj.Vraag.trim(),
+                        Antwoord: qObj.Antwoord.trim(),
+                        Categorie: qObj.Categorie ? qObj.Categorie.trim() : "Algemeen",
+                        Moeilijkheidsgraad: qObj.Moeilijkheidsgraad ? qObj.Moeilijkheidsgraad.trim() : "Gemiddeld"
+                    });
+                } else {
+                    skippedCount++;
+                    // Bepaal reden en sla content op voor foutrapport
+                    let reason = "Onbekende fout";
+                    if (!qObj.Vraag) reason = "Kolom 'Vraag' ontbreekt of is leeg";
+                    else if (!qObj.Antwoord) reason = "Kolom 'Antwoord' ontbreekt of is leeg";
+                    
+                    const rowSnippet = row.join(' | ').substring(0, 80) + (row.join(' | ').length > 80 ? '...' : '');
+                    errors.push({ row: i + 1, reason: reason, content: rowSnippet });
+                }
+            }
+            return { validQuestions, skippedCount, errors };
+        }
+
+        // --- Robuuste CSV Parser Functies ---
+
+        function parseCSVRobust(text, delimiter) {
+            const rows = [];
+            let currentRow = [];
+            let currentVal = '';
             let inQuotes = false;
+            
             for (let i = 0; i < text.length; i++) {
                 const char = text[i];
-                if (char === '"') inQuotes = !inQuotes;
-                else if (char === delimiter && !inQuotes) {
-                    result.push(current);
-                    current = '';
-                } else current += char;
+                const nextChar = text[i + 1];
+
+                if (inQuotes) {
+                    if (char === '"' && nextChar === '"') {
+                        currentVal += '"';
+                        i++; 
+                    } else if (char === '"') {
+                        inQuotes = false;
+                    } else {
+                        currentVal += char;
+                    }
+                } else {
+                    if (char === '"') {
+                        inQuotes = true;
+                    } else if (char === delimiter) {
+                        currentRow.push(currentVal);
+                        currentVal = '';
+                    } else if (char === '\n' || char === '\r') {
+                        if (char === '\r' && nextChar === '\n') i++;
+
+                        currentRow.push(currentVal);
+                        rows.push(currentRow);
+                        
+                        currentRow = [];
+                        currentVal = '';
+                    } else {
+                        currentVal += char;
+                    }
+                }
             }
-            result.push(current);
-            return result.map(s => s.replace(/^"|"$/g, '').trim());
+            
+            if (currentRow.length > 0 || currentVal !== '') {
+                currentRow.push(currentVal);
+                rows.push(currentRow);
+            }
+
+            return rows;
+        }
+
+        function detectHeaders(firstRow) {
+            if (!firstRow || firstRow.length === 0) return { found: false };
+
+            const map = { Vraag: -1, Antwoord: -1, Categorie: -1, Moeilijkheidsgraad: -1 };
+            const lowerRow = firstRow.map(c => c.toLowerCase().trim());
+            
+            lowerRow.forEach((col, idx) => {
+                if (col.includes('vraag') || col.includes('question')) map.Vraag = idx;
+                else if (col.includes('antwoord') || col.includes('answer')) map.Antwoord = idx;
+                else if (col.includes('categorie') || col.includes('category')) map.Categorie = idx;
+                else if (col.includes('moeilijk') || col.includes('difficulty')) map.Moeilijkheidsgraad = idx;
+            });
+
+            if (map.Vraag !== -1 && map.Antwoord !== -1) {
+                return { found: true, map: map };
+            }
+            return { found: false };
         }
 
         // --- Stap 2: Instellingen ---
@@ -474,7 +648,7 @@
             const maxQ = allQuestions.length;
             document.getElementById('maxQuestions').textContent = maxQ;
             document.getElementById('questionCount').max = maxQ;
-            document.getElementById('questionCount').value = Math.min(5, maxQ);
+            document.getElementById('questionCount').value = Math.min(10, maxQ);
 
             const categories = [...new Set(allQuestions.map(q => q.Categorie))].sort();
             const catList = document.getElementById('categoriesList');
@@ -542,7 +716,6 @@
             document.getElementById('progressBarFill').style.width = `${pct}%`;
             
             // Track vraag voor overzicht op einde
-            // Check if not already added (in case of re-render)
             if(playedQuestions.length === currentQuestionIndex) {
                  playedQuestions.push(q);
             }
@@ -569,7 +742,6 @@
             playedQuestions.forEach((q, idx) => {
                 const li = document.createElement('li');
                 li.className = 'review-item';
-                // Neutrale styling, geen rood/groen want geen score
                 li.style.borderLeft = "5px solid var(--primary)"; 
                 
                 li.innerHTML = `
